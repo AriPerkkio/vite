@@ -77,7 +77,7 @@ interface ViteDevServer {
    * Chokidar watcher instance.
    * https://github.com/paulmillr/chokidar#api
    */
-  watcher: FSWatcher
+  watcher?: FSWatcher
   /**
    * Web socket server with `send(payload)` method.
    */

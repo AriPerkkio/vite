@@ -6,6 +6,10 @@ export function resolveChokidarOptions(
   config: ResolvedConfig,
   options: WatchOptions | undefined,
 ): WatchOptions {
+  if (config.server.watch === false) {
+    return {}
+  }
+
   const { ignored = [], ...otherOptions } = options ?? {}
 
   const resolvedWatchOptions: WatchOptions = {

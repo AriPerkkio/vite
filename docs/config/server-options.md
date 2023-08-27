@@ -176,9 +176,9 @@ The error that appears in the Browser when the fallback happens can be ignored. 
 
 ## server.watch
 
-- **Type:** `object`
+- **Type:** `object | false`
 
-File system watcher options to pass on to [chokidar](https://github.com/paulmillr/chokidar#api).
+File system watcher options to pass on to [chokidar](https://github.com/paulmillr/chokidar#api). Pass `false` to disable watcher completely.
 
 The Vite server watcher skips `.git/` and `node_modules/` directories by default. If you want to watch a package inside `node_modules/`, you can pass a negated glob pattern to `server.watch.ignored`. That is:
 

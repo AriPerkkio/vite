@@ -277,7 +277,10 @@ const devHtmlHook: IndexHtmlTransformHook = async (
 
       // ensure module in graph after successful load
       const mod = await moduleGraph.ensureEntryFromUrl(url, false)
-      ensureWatchedFile(watcher, mod.file, config.root)
+
+      if (watcher) {
+        ensureWatchedFile(watcher, mod.file, config.root)
+      }
 
       const result = await server!.pluginContainer.transform(code, mod.id!)
       let content = ''

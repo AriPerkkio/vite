@@ -264,7 +264,7 @@ export function esbuildPlugin(config: ResolvedConfig): Plugin {
     configureServer(_server) {
       server = _server
       server.watcher
-        .on('add', reloadOnTsconfigChange)
+        ?.on('add', reloadOnTsconfigChange)
         .on('change', reloadOnTsconfigChange)
         .on('unlink', reloadOnTsconfigChange)
     },
@@ -515,14 +515,14 @@ async function loadTsconfigJsonForFile(
   try {
     const result = await parse(filename, await tsconfckParseOptions)
     // tsconfig could be out of root, make sure it is watched on dev
-    if (server && result.tsconfigFile !== 'no_tsconfig_file_found') {
+    if (server?.watcher && result.tsconfigFile !== 'no_tsconfig_file_found') {
       ensureWatchedFile(server.watcher, result.tsconfigFile, server.config.root)
     }
     return result.tsconfig
   } catch (e) {
     if (e instanceof TSConfckParseError) {
       // tsconfig could be out of root, make sure it is watched on dev
-      if (server && e.tsconfigFile) {
+      if (server?.watcher && e.tsconfigFile) {
         ensureWatchedFile(server.watcher, e.tsconfigFile, server.config.root)
       }
     }

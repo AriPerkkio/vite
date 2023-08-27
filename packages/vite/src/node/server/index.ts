@@ -88,7 +88,7 @@ export interface ServerOptions extends CommonServerOptions {
    * chokidar watch options
    * https://github.com/paulmillr/chokidar#api
    */
-  watch?: WatchOptions
+  watch?: WatchOptions | false
   /**
    * Create Vite dev server to be used as a middleware in an existing server
    * @default false
@@ -194,8 +194,9 @@ export interface ViteDevServer {
   /**
    * chokidar watcher instance
    * https://github.com/paulmillr/chokidar#api
+   * // TODO: Setting this as optional breaks typings without major bump. Maybe pass no-op instead?
    */
-  watcher: FSWatcher
+  watcher?: FSWatcher
   /**
    * web socket server with `send(payload)` method
    */
@@ -344,11 +345,6 @@ export async function _createServer(
   const httpsOptions = await resolveHttpsConfig(config.server.https)
   const { middlewareMode } = serverConfig
 
-  const resolvedWatchOptions = resolveChokidarOptions(config, {
-    disableGlobbing: true,
-    ...serverConfig.watch,
-  })
-
   const middlewares = connect() as Connect.Server
   const httpServer = middlewareMode
     ? null
@@ -359,11 +355,17 @@ export async function _createServer(
     setClientErrorHandler(httpServer, config.logger)
   }
 
-  const watcher = chokidar.watch(
-    // config file dependencies and env file might be outside of root
-    [root, ...config.configFileDependencies, config.envDir],
-    resolvedWatchOptions,
-  ) as FSWatcher
+  const watcher =
+    config.server.watch === false
+      ? undefined
+      : chokidar.watch(
+          // config file dependencies and env file might be outside of root
+          [root, ...config.configFileDependencies, config.envDir],
+          resolveChokidarOptions(config, {
+            disableGlobbing: true,
+            ...serverConfig.watch,
+          }),
+        )
 
   const moduleGraph: ModuleGraph = new ModuleGraph((url, ssr) =>
     container.resolveId(url, undefined, { ssr }),
@@ -456,7 +458,7 @@ export async function _createServer(
         }
       }
       await Promise.allSettled([
-        watcher.close(),
+        watcher?.close(),
         ws.close(),
         container.close(),
         getDepsOptimizer(server.config)?.close(),
@@ -548,7 +550,7 @@ export async function _createServer(
     await onHMRUpdate(file, true)
   }
 
-  watcher.on('change', async (file) => {
+  watcher?.on('change', async (file) => {
     file = normalizePath(file)
     // invalidate module graph cache on file change
     moduleGraph.onFileChange(file)
@@ -556,8 +558,8 @@ export async function _createServer(
     await onHMRUpdate(file, false)
   })
 
-  watcher.on('add', onFileAddUnlink)
-  watcher.on('unlink', onFileAddUnlink)
+  watcher?.on('add', onFileAddUnlink)
+  watcher?.on('unlink', onFileAddUnlink)
 
   ws.on('vite:invalidate', async ({ path, message }: InvalidatePayload) => {
     const mod = moduleGraph.urlToModuleMap.get(path)
