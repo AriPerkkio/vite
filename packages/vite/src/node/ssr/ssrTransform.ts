@@ -94,7 +94,12 @@ async function ssrTransformScript(
   // hoist at the start of the file, after the hashbang
   const hoistIndex = code.match(hashbangRE)?.[0].length ?? 0
 
-  function defineImport(source: string, metadata?: DefineImportMetadata) {
+  function defineImport(
+    source: string,
+    start: number,
+    end: number,
+    metadata?: DefineImportMetadata,
+  ) {
     deps.add(source)
     const importId = `__vite_ssr_import_${uid++}__`
 
@@ -106,15 +111,20 @@ async function ssrTransformScript(
       metadata = undefined
     }
     const metadataStr = metadata ? `, ${JSON.stringify(metadata)}` : ''
+    const content = `const ${importId} = await ${ssrImportKey}(${JSON.stringify(
+      source,
+    )}${metadataStr});\n`
 
     // There will be an error if the module is called before it is imported,
     // so the module import statement is hoisted to the top
-    s.appendLeft(
-      hoistIndex,
-      `const ${importId} = await ${ssrImportKey}(${JSON.stringify(
-        source,
-      )}${metadataStr});\n`,
-    )
+    const isBetween = start <= hoistIndex && hoistIndex <= end
+    console.log({ isBetween, start, end, hoistIndex })
+    if (!isBetween) {
+      s.move(start, end, hoistIndex)
+    }
+
+    s.overwrite(start, end, content)
+
     return importId
   }
 
@@ -132,15 +142,20 @@ async function ssrTransformScript(
     // import { baz } from 'foo' --> baz -> __import_foo__.baz
     // import * as ok from 'foo' --> ok -> __import_foo__
     if (node.type === 'ImportDeclaration') {
-      const importId = defineImport(node.source.value as string, {
-        importedNames: node.specifiers
-          .map((s) => {
-            if (s.type === 'ImportSpecifier') return s.imported.name
-            else if (s.type === 'ImportDefaultSpecifier') return 'default'
-          })
-          .filter(isDefined),
-      })
-      s.remove(node.start, node.end)
+      const importId = defineImport(
+        node.source.value as string,
+        node.start,
+        node.end,
+        {
+          importedNames: node.specifiers
+            .map((s) => {
+              if (s.type === 'ImportSpecifier') return s.imported.name
+              else if (s.type === 'ImportDefaultSpecifier') return 'default'
+            })
+            .filter(isDefined),
+        },
+      )
+      // s.remove(node.start, node.end)
       for (const spec of node.specifiers) {
         if (spec.type === 'ImportSpecifier') {
           idToImportMap.set(
@@ -179,12 +194,16 @@ async function ssrTransformScript(
         }
         s.remove(node.start, (node.declaration as Node).start)
       } else {
-        s.remove(node.start, node.end)
         if (node.source) {
           // export { foo, bar } from './foo'
-          const importId = defineImport(node.source.value as string, {
-            importedNames: node.specifiers.map((s) => s.local.name),
-          })
+          const importId = defineImport(
+            node.source.value as string,
+            node.start,
+            node.end,
+            {
+              importedNames: node.specifiers.map((s) => s.local.name),
+            },
+          )
           // hoist re-exports near the defined import so they are immediately exported
           for (const spec of node.specifiers) {
             defineExport(
@@ -194,6 +213,8 @@ async function ssrTransformScript(
             )
           }
         } else {
+          s.remove(node.start, node.end)
+
           // export { foo, bar }
           for (const spec of node.specifiers) {
             const local = spec.local.name
@@ -233,8 +254,11 @@ async function ssrTransformScript(
 
     // export * from './foo'
     if (node.type === 'ExportAllDeclaration') {
-      s.remove(node.start, node.end)
-      const importId = defineImport(node.source.value as string)
+      const importId = defineImport(
+        node.source.value as string,
+        node.start,
+        node.end,
+      )
       // hoist re-exports near the defined import so they are immediately exported
       if (node.exported) {
         defineExport(hoistIndex, node.exported.name, `${importId}`)
